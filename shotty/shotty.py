@@ -1,6 +1,6 @@
 ## Code to list EC2 instances
 
-import boto3
+import boto3 
 import click
 
 session = boto3.Session(profile_name = 'shotty')
@@ -17,11 +17,94 @@ def filter_instances(project):
 
 	return instances
 
-## @click.command()
+
+#def filter_volumes(project):
+#	vols = []
+#
+#	if project:
+#		filters = [{'Name':'tag:Project', 'Values':[project]}]
+#		vols = ec2.volumes.filter(Filters=filters)
+#	else:
+#		vols = ec2.volumes.all()
+#	return vols
+
 
 @click.group()
+def cli():
+	"""Shotty manages snapshots"""
+
+@cli.group('snapshots')
+def snapshots():
+	"""Commands for snapshots"""
+
+@snapshots.command('list')
+@click.option('--project', default=None,
+	help="Only snapshots for project (tag Project:<name>)")
+
+def list_snapshots(project):
+	"List EC2 Snapshots"
+
+	instances = filter_instances(project)
+	for i in instances:
+		for v in i.volumes.all():
+			for s in v.snapshots.all():
+				print(", ".join((
+					s.id,
+					v.id,
+					i.id,
+					s.state,
+					s.progress,
+					s.start_time.strftime("%c")
+				)))
+	return
+
+@cli.group('volumes')
+def volumes():
+	"""Commands for volumes"""
+
+@volumes.command('list')
+@click.option('--project', default=None,
+	help="Only volumes for project (tag Project:<name>)")
+
+def list_volumes(project):
+	"List EC2 Volumes"
+
+	instances = filter_instances(project)
+
+	for i in instances:
+		for v in i.volumes.all():
+	        	print(", ".join((
+		        	v.id,
+		        	i.id,
+		        	v.state,
+		        	str(v.size) + "GiB",
+		        	v.encrypted and "Encrypted" or "Not Encrypted"
+	        	)))
+	return
+
+
+@cli.group('instances')
 def instances():
 	"""Commands for instances"""
+
+@instances.command('snapshot',
+	help="Create snapshots of all volumes")
+@click.option('--project', default=None,
+	help="Only instances for project (tag Project:<name>)")
+
+def create_snapshots(project):
+	"Create snapshots for EC2 Instances"
+
+	instances = filter_instances(project)
+
+	for i in instances:
+		i.stop()
+		for v in i.volumes.all():
+			print("Creating snapshot of {0}".format(v.id))
+			v.create_snapshot(Description="Created by snapshotalyzer")
+
+	return	
+
 
 @instances.command('list')
 @click.option('--project', default=None,
@@ -91,4 +174,5 @@ def start_instances(project):
 	
 if __name__ == '__main__':
 	## list_instances()
-	instances()
+	## instances()
+	cli()
